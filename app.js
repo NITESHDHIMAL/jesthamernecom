@@ -3,10 +3,13 @@ const express = require('express');
 const Product = require('./model/prorductModel');
 const mongodbConnect = require('./database');
 const User = require('./model/userModel');
+const jwt = require('jsonwebtoken')
+const cookieParser = require('cookie-parser')
 
 mongodbConnect()
 const app = express();
 app.use(express.json())
+app.use(cookieParser())
 
 
 app.get('/product', async (req, res) => {
@@ -71,12 +74,12 @@ app.patch('/product/:id', async (req, res) => {
 
         res.json({
             message: "Product updated success.",
-            
+
         })
-    }catch(error){
+    } catch (error) {
         res.json({
-            message:"Server Error",
-            error:error.message
+            message: "Server Error",
+            error: error.message
         })
     }
 })
@@ -101,31 +104,12 @@ app.post('/product', async (req, res) => {
 })
 
 
-
-
-
 app.get('/user', async (req, res) => {
     try {
         const user = await User.find();
         res.json({
-            message: "User fetched success.",
+            message: "User fetched success",
             data: user
-        })
-    } catch (error) {
-        res.json({
-            message: "Server Error.",
-            error: error.message
-        })
-    }
-})
-
-app.get('/user/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const singleUser = await User.findById(id)
-        res.json({
-            message: "User fetched success.",
-            data: singleUser
         })
     } catch (error) {
         res.status(500).json({
@@ -136,21 +120,81 @@ app.get('/user/:id', async (req, res) => {
 })
 
 
-app.post('/user', async (req, res) => {
+app.post('/register', async (req, res) => {
+    const { username, email, password } = req.body;
     try {
-        const { username, phone, email, password } = req.body;
-        const user = await User.create({ username, phone, email, password });
+
+        let user = await User.findOne({ email })
+        if (user) {
+            return res.status(400).json({
+                messasage: "User already exists."
+            })
+        }
+
+        user = new User({ username, email, password });
+
+        await user.save();
+
         res.status(201).json({
-            message: "User created success",
+            message: "User registered successfully.",
             data: user
         })
+
+
     } catch (error) {
         res.status(500).json({
-            message: "Server Error",
+            message: "Server error",
+            error: error.message
+        })
+    }
+
+})
+
+
+
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({
+                message: "Invalid user email."
+            })
+        }
+
+        const isMatch = await user.matchPassword(password);
+        if (!isMatch) {
+            return res.status(400).json({
+                message: "Invalid user password"
+            })
+        }
+
+        // generate a jwt token 
+        const token = jwt.sign(
+            {id: user._id, role: user.role},
+            process.env.JWT_SECRET,
+            {expiresIn: "1h"}
+        )
+
+        res.cookie('token', token)
+
+        res.json({
+            token:token,
+            message: "Login Successfully."
+        })
+
+
+    } catch (error) {
+        res.status(500).json({
+            message: "Server error",
             error: error.message
         })
     }
 })
+
+
+
 
 
 
